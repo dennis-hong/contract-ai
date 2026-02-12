@@ -1,6 +1,5 @@
--- CreateTable
 CREATE TABLE "Contract" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'parsing',
     "fileName" TEXT NOT NULL,
     "filePath" TEXT NOT NULL,
@@ -21,6 +20,7 @@ CREATE TABLE "Contract" (
     "endDate" TEXT,
     "securityLevel" TEXT,
     "specialTerms" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "Contract_pkey" PRIMARY KEY ("id")
 );
