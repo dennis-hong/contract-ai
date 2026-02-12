@@ -12,7 +12,6 @@
     "generate-pdf": "node scripts/generate-sample-pdf.js"
   },
   "dependencies": {
-    "@prisma/adapter-better-sqlite3": "^7.4.0",
     "@prisma/client": "^7.4.0",
     "multer": "^2.0.2",
     "next": "16.1.6",
