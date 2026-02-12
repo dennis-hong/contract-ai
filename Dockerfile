@@ -41,10 +41,10 @@ RUN chown nextjs:nodejs .next
 RUN mkdir -p uploads
 RUN chown nextjs:nodejs uploads
 
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/src/generated ./src/generated
-COPY --from=builder /app/node_modules ./node_modules
 
 USER nextjs
 
