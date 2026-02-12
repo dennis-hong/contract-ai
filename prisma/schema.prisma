@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Contract {
+  id        String   @id @default(uuid())
+  status    String   @default("parsing") // parsing, review, saved
+
+  // File info
+  fileName  String
+  filePath  String
+  rawText   String?
+
+  // Extracted fields
+  contractName     String?
+  partyACompany    String?
+  partyARepresentative String?
+  partyAAddress    String?
+  partyABusinessNo String?
+  partyBCompany    String?
+  partyBRepresentative String?
+  partyBAddress    String?
+  partyBBusinessNo String?
+  dataScope        String?
+  recordCount      String?
+  contractAmount   String?
+  startDate        String?
+  endDate          String?
+  securityLevel    String?
+  specialTerms     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

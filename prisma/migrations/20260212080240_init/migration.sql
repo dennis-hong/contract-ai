@@ -1,0 +1,26 @@
+-- CreateTable
+CREATE TABLE "Contract" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "status" TEXT NOT NULL DEFAULT 'parsing',
+    "fileName" TEXT NOT NULL,
+    "filePath" TEXT NOT NULL,
+    "rawText" TEXT,
+    "contractName" TEXT,
+    "partyACompany" TEXT,
+    "partyARepresentative" TEXT,
+    "partyAAddress" TEXT,
+    "partyABusinessNo" TEXT,
+    "partyBCompany" TEXT,
+    "partyBRepresentative" TEXT,
+    "partyBAddress" TEXT,
+    "partyBBusinessNo" TEXT,
+    "dataScope" TEXT,
+    "recordCount" TEXT,
+    "contractAmount" TEXT,
+    "startDate" TEXT,
+    "endDate" TEXT,
+    "securityLevel" TEXT,
+    "specialTerms" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+);
