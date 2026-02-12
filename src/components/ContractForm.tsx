@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslation } from "@/lib/i18n/context";
 import type { ContractRecord } from "@/types";
 
 interface ContractFormProps {
@@ -11,32 +12,32 @@ interface ContractFormProps {
 
 interface FieldConfig {
   key: keyof ContractRecord;
-  label: string;
+  labelKey: "companyName" | "representative" | "address" | "businessNo" | "dataScope" | "recordCount" | "contractAmount" | "startDate" | "endDate" | "securityLevel" | "specialTerms";
   type?: "text" | "textarea" | "date";
 }
 
 const partyAFields: FieldConfig[] = [
-  { key: "partyACompany", label: "회사명" },
-  { key: "partyARepresentative", label: "대표자" },
-  { key: "partyAAddress", label: "주소" },
-  { key: "partyABusinessNo", label: "사업자등록번호" },
+  { key: "partyACompany", labelKey: "companyName" },
+  { key: "partyARepresentative", labelKey: "representative" },
+  { key: "partyAAddress", labelKey: "address" },
+  { key: "partyABusinessNo", labelKey: "businessNo" },
 ];
 
 const partyBFields: FieldConfig[] = [
-  { key: "partyBCompany", label: "회사명" },
-  { key: "partyBRepresentative", label: "대표자" },
-  { key: "partyBAddress", label: "주소" },
-  { key: "partyBBusinessNo", label: "사업자등록번호" },
+  { key: "partyBCompany", labelKey: "companyName" },
+  { key: "partyBRepresentative", labelKey: "representative" },
+  { key: "partyBAddress", labelKey: "address" },
+  { key: "partyBBusinessNo", labelKey: "businessNo" },
 ];
 
 const dataFields: FieldConfig[] = [
-  { key: "dataScope", label: "데이터 범위", type: "textarea" },
-  { key: "recordCount", label: "데이터 건수" },
-  { key: "contractAmount", label: "계약 금액" },
-  { key: "startDate", label: "계약 시작일" },
-  { key: "endDate", label: "계약 종료일" },
-  { key: "securityLevel", label: "보안 등급" },
-  { key: "specialTerms", label: "특약사항", type: "textarea" },
+  { key: "dataScope", labelKey: "dataScope", type: "textarea" },
+  { key: "recordCount", labelKey: "recordCount" },
+  { key: "contractAmount", labelKey: "contractAmount" },
+  { key: "startDate", labelKey: "startDate" },
+  { key: "endDate", labelKey: "endDate" },
+  { key: "securityLevel", labelKey: "securityLevel" },
+  { key: "specialTerms", labelKey: "specialTerms", type: "textarea" },
 ];
 
 export default function ContractForm({
@@ -44,6 +45,7 @@ export default function ContractForm({
   onSave,
   onReparse,
 }: ContractFormProps) {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState<ContractRecord>(contract);
   const [saving, setSaving] = useState(false);
   const [reparsing, setReparsing] = useState(false);
@@ -62,13 +64,13 @@ export default function ContractForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...formData, status: "saved" }),
       });
-      if (!res.ok) throw new Error("저장에 실패했습니다.");
+      if (!res.ok) throw new Error(t.form.saveFailed);
       const updated = await res.json();
       onSave(updated);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "저장에 실패했습니다.");
+      alert(err instanceof Error ? err.message : t.form.saveFailed);
     } finally {
       setSaving(false);
     }
@@ -80,21 +82,21 @@ export default function ContractForm({
       const res = await fetch(`/api/contracts/${contract.id}/parse`, {
         method: "POST",
       });
-      if (!res.ok) throw new Error("재파싱에 실패했습니다.");
+      if (!res.ok) throw new Error(t.form.reparseFailed);
       const updated = await res.json();
       setFormData(updated);
       onReparse();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "재파싱에 실패했습니다.");
+      alert(err instanceof Error ? err.message : t.form.reparseFailed);
     } finally {
       setReparsing(false);
     }
   };
 
-  const renderField = ({ key, label, type = "text" }: FieldConfig) => (
+  const renderField = ({ key, labelKey, type = "text" }: FieldConfig) => (
     <div key={key}>
       <label className="block text-sm font-medium text-gray-700 mb-1">
-        {label}
+        {t.form[labelKey]}
       </label>
       {type === "textarea" ? (
         <textarea
@@ -119,7 +121,7 @@ export default function ContractForm({
       {/* Contract Name */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          계약명
+          {t.form.contractName}
         </label>
         <input
           type="text"
@@ -133,9 +135,9 @@ export default function ContractForm({
       <div className="bg-blue-50 rounded-lg p-4 space-y-3">
         <h3 className="text-sm font-semibold text-blue-900 flex items-center gap-2">
           <span className="w-6 h-6 bg-blue-600 text-white rounded flex items-center justify-center text-xs font-bold">
-            갑
+            {t.form.partyA}
           </span>
-          구매자 정보
+          {t.form.partyALabel}
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {partyAFields.map(renderField)}
@@ -146,9 +148,9 @@ export default function ContractForm({
       <div className="bg-emerald-50 rounded-lg p-4 space-y-3">
         <h3 className="text-sm font-semibold text-emerald-900 flex items-center gap-2">
           <span className="w-6 h-6 bg-emerald-600 text-white rounded flex items-center justify-center text-xs font-bold">
-            을
+            {t.form.partyB}
           </span>
-          판매자 정보
+          {t.form.partyBLabel}
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {partyBFields.map(renderField)}
@@ -157,7 +159,7 @@ export default function ContractForm({
 
       {/* Data Details */}
       <div className="space-y-3">
-        <h3 className="text-sm font-semibold text-gray-900">계약 상세</h3>
+        <h3 className="text-sm font-semibold text-gray-900">{t.form.contractDetails}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {dataFields.map(renderField)}
         </div>
@@ -173,12 +175,12 @@ export default function ContractForm({
           {saving ? (
             <span className="flex items-center justify-center gap-2">
               <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              저장 중...
+              {t.form.saving}
             </span>
           ) : saveSuccess ? (
-            "저장 완료!"
+            t.form.saved
           ) : (
-            "저장"
+            t.form.save
           )}
         </button>
         <button
@@ -189,10 +191,10 @@ export default function ContractForm({
           {reparsing ? (
             <span className="flex items-center gap-2">
               <span className="w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" />
-              재파싱 중...
+              {t.form.reparsing}
             </span>
           ) : (
-            "재파싱"
+            t.form.reparse
           )}
         </button>
       </div>

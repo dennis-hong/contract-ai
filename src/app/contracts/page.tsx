@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import StatusBadge from "@/components/StatusBadge";
+import { useTranslation } from "@/lib/i18n/context";
 
 interface ContractListItem {
   id: string;
@@ -21,6 +22,7 @@ interface ContractListItem {
 export default function ContractsPage() {
   const [contracts, setContracts] = useState<ContractListItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const { t, language } = useTranslation();
 
   useEffect(() => {
     fetch("/api/contracts")
@@ -31,7 +33,8 @@ export default function ContractsPage() {
   }, []);
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString("ko-KR", {
+    const locale = language === "ko" ? "ko-KR" : "en-US";
+    return new Date(dateStr).toLocaleDateString(locale, {
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -44,16 +47,16 @@ export default function ContractsPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">계약서 목록</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t.contracts.title}</h1>
           <p className="mt-1 text-sm text-gray-500">
-            업로드된 모든 계약서를 확인하고 관리할 수 있습니다.
+            {t.contracts.subtitle}
           </p>
         </div>
         <Link
           href="/"
           className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
         >
-          새 계약서 업로드
+          {t.contracts.uploadNew}
         </Link>
       </div>
 
@@ -77,16 +80,16 @@ export default function ContractsPage() {
             />
           </svg>
           <h3 className="text-lg font-medium text-gray-900 mb-1">
-            아직 계약서가 없습니다
+            {t.contracts.noContracts}
           </h3>
           <p className="text-sm text-gray-500 mb-4">
-            첫 번째 계약서를 업로드해 보세요.
+            {t.contracts.noContractsDesc}
           </p>
           <Link
             href="/"
             className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
           >
-            계약서 업로드
+            {t.contracts.uploadContract}
           </Link>
         </div>
       ) : (
@@ -95,22 +98,22 @@ export default function ContractsPage() {
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  계약명
+                  {t.contracts.contractName}
                 </th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  갑 (구매자)
+                  {t.contracts.partyABuyer}
                 </th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  을 (판매자)
+                  {t.contracts.partyBSeller}
                 </th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  계약 금액
+                  {t.contracts.amount}
                 </th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  상태
+                  {t.contracts.status}
                 </th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  등록일
+                  {t.contracts.createdAt}
                 </th>
                 <th className="px-6 py-3" />
               </tr>
@@ -151,7 +154,7 @@ export default function ContractsPage() {
                       href={`/?id=${c.id}`}
                       className="text-sm text-blue-600 hover:text-blue-800 font-medium"
                     >
-                      보기
+                      {t.contracts.view}
                     </Link>
                   </td>
                 </tr>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useTranslation } from "@/lib/i18n/context";
 
 interface PDFUploaderProps {
   onUploadComplete: (contractId: string) => void;
@@ -15,11 +16,12 @@ export default function PDFUploader({
 }: PDFUploaderProps) {
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { t } = useTranslation();
 
   const handleUpload = useCallback(
     async (file: File) => {
       if (!file.name.toLowerCase().endsWith(".pdf")) {
-        setError("PDF 파일만 업로드할 수 있습니다.");
+        setError(t.uploader.pdfOnly);
         return;
       }
 
@@ -37,20 +39,20 @@ export default function PDFUploader({
 
         if (!res.ok) {
           const data = await res.json();
-          throw new Error(data.error || "업로드에 실패했습니다.");
+          throw new Error(data.error || t.uploader.uploadFailed);
         }
 
         const contract = await res.json();
         onUploadComplete(contract.id);
       } catch (err) {
         setError(
-          err instanceof Error ? err.message : "업로드에 실패했습니다."
+          err instanceof Error ? err.message : t.uploader.uploadFailed
         );
       } finally {
         setIsUploading(false);
       }
     },
-    [onUploadComplete, setIsUploading]
+    [onUploadComplete, setIsUploading, t]
   );
 
   const handleDrop = useCallback(
@@ -97,7 +99,7 @@ export default function PDFUploader({
             <>
               <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-3" />
               <p className="text-sm font-medium text-gray-600">
-                업로드 및 파싱 중...
+                {t.uploader.uploading}
               </p>
             </>
           ) : (
@@ -116,10 +118,10 @@ export default function PDFUploader({
                 />
               </svg>
               <p className="text-sm font-medium text-gray-600 mb-1">
-                PDF 파일을 드래그하거나 클릭하여 업로드
+                {t.uploader.dragOrClick}
               </p>
               <p className="text-xs text-gray-400">
-                의료 데이터 구매 계약서 (PDF)
+                {t.uploader.fileType}
               </p>
             </>
           )}
