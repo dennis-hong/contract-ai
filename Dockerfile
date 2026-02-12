@@ -1,56 +1,28 @@
-FROM node:20-alpine AS base
+FROM node:20-alpine
 
-# Install dependencies
-FROM base AS deps
 RUN apk add --no-cache libc6-compat openssl
+
 WORKDIR /app
+
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
 COPY prisma.config.ts ./prisma.config.ts
 RUN npm ci
 
-# Build
-FROM base AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV NODE_ENV=production
 ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
 
 RUN npx prisma generate
 RUN npm run build
 
-# Production
-FROM base AS runner
-WORKDIR /app
+RUN mkdir -p uploads
 
 ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
-
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
-
-RUN mkdir .next
-RUN chown nextjs:nodejs .next
-RUN mkdir -p uploads
-RUN chown nextjs:nodejs uploads
-
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/src/generated ./src/generated
-
-USER nextjs
-
-EXPOSE 3000
-
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node server.js"]
+EXPOSE 3000
+
+CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && npm start"]
