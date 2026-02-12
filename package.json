@@ -7,7 +7,6 @@
     "build": "npx prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "npx prisma generate",
     "db:migrate": "npx prisma migrate dev",
     "db:push": "npx prisma db push",
     "generate-pdf": "node scripts/generate-sample-pdf.js"
