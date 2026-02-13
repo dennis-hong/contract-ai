@@ -5,6 +5,12 @@ import { v4 as uuidv4 } from "uuid";
 import { prisma } from "@/lib/db";
 import { extractTextFromPDF } from "@/lib/pdf-parser";
 import { extractContractData } from "@/lib/ai-extractor";
+import {
+  defaultExtractedContractData,
+  extractedToInput,
+  toContractDataWriteInput,
+} from "@/lib/contract-data";
+import { ContractStatus } from "@/generated/prisma/enums";
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,7 +28,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Save the file
     const uploadsDir = path.join(process.cwd(), "uploads");
     await mkdir(uploadsDir, { recursive: true });
 
@@ -33,19 +38,16 @@ export async function POST(request: NextRequest) {
     const bytes = await file.arrayBuffer();
     await writeFile(filePath, Buffer.from(bytes));
 
-    // Create contract record with parsing status
     const contract = await prisma.contract.create({
       data: {
         fileName: file.name,
         filePath: fileName,
-        status: "parsing",
       },
     });
 
-    // Parse PDF and extract data in the background
     parsePDFAndExtract(contract.id, filePath).catch(console.error);
 
-    return NextResponse.json(contract, { status: 201 });
+    return NextResponse.json({ id: contract.id }, { status: 201 });
   } catch (error) {
     console.error("Upload error:", error);
     return NextResponse.json(
@@ -59,22 +61,42 @@ async function parsePDFAndExtract(contractId: string, filePath: string) {
   try {
     const rawText = await extractTextFromPDF(filePath);
     const extracted = await extractContractData(rawText);
+    const input = extractedToInput(extracted);
 
     await prisma.contract.update({
       where: { id: contractId },
       data: {
         rawText,
-        status: "review",
-        ...extracted,
+        vendor: extracted.vendorName
+          ? {
+              connectOrCreate: {
+                where: { name: extracted.vendorName },
+                create: { name: extracted.vendorName },
+              },
+            }
+          : undefined,
+        contractData: {
+          create: toContractDataWriteInput({
+            ...input,
+            status: ContractStatus.in_review,
+          }),
+        },
       },
     });
   } catch (error) {
     console.error("Parse error:", error);
+    const fallback = extractedToInput(defaultExtractedContractData());
+
     await prisma.contract.update({
       where: { id: contractId },
       data: {
-        status: "review",
         rawText: `Error parsing PDF: ${error instanceof Error ? error.message : "Unknown error"}`,
+        contractData: {
+          create: toContractDataWriteInput({
+            ...fallback,
+            status: ContractStatus.draft,
+          }),
+        },
       },
     });
   }

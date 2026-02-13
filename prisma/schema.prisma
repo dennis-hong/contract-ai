@@ -7,33 +7,128 @@ datasource db {
   provider = "postgresql"
 }
 
-model Contract {
+enum ContractStatus {
+  draft
+  in_review
+  finalized
+}
+
+enum LicenseType {
+  limited
+  perpetual
+  ownership
+}
+
+enum Trilean {
+  true
+  false
+  not_specified
+}
+
+enum StorageMethod {
+  cloud
+  on_premise
+  not_specified
+  others
+}
+
+enum DataUsageType {
+  academic_analysis
+  commercial_product_development
+  internal_research
+  validation_only
+}
+
+enum DataModificationType {
+  copy
+  modify_clinical_data
+  modify_dicom_tags
+  modify_format
+  modify_pixels
+  not_specified
+}
+
+enum PhiDeidMethod {
+  anonymization
+  pseudonymization
+  hipaa_deidentification
+  other
+}
+
+enum PhiDeidHipaaMethod {
+  safe_harbor
+  expert_determination
+}
+
+model Vendor {
   id        String   @id @default(uuid())
-  status    String   @default("parsing") // parsing, review, saved
-
-  // File info
-  fileName  String
-  filePath  String
-  rawText   String?
-
-  // Extracted fields
-  contractName     String?
-  partyACompany    String?
-  partyARepresentative String?
-  partyAAddress    String?
-  partyABusinessNo String?
-  partyBCompany    String?
-  partyBRepresentative String?
-  partyBAddress    String?
-  partyBBusinessNo String?
-  dataScope        String?
-  recordCount      String?
-  contractAmount   String?
-  startDate        String?
-  endDate          String?
-  securityLevel    String?
-  specialTerms     String?
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  name      String   @unique @db.VarChar(255)
+
+  salts     Salt[]
+  contracts Contract[]
+}
+
+model Salt {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  salt      Bytes
+  vendorId  String
+  vendor    Vendor   @relation(fields: [vendorId], references: [id])
+
+  @@unique([salt, vendorId])
+}
+
+model Contract {
+  id               String     @id @default(uuid())
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  parentContractId String?
+  parentContract   Contract?  @relation("ContractParent", fields: [parentContractId], references: [id])
+  childContracts   Contract[] @relation("ContractParent")
+  vendorId         String?
+  vendor           Vendor?    @relation(fields: [vendorId], references: [id])
+
+  contractData     ContractData[]
+
+  // Keep file info for upload flow
+  fileName         String?
+  filePath         String?
+  rawText          String?
+}
+
+model ContractData {
+  id                                BigInt                 @id @default(autoincrement())
+  createdAt                         DateTime               @default(now())
+  updatedAt                         DateTime               @updatedAt
+  contractId                        String
+  contract                          Contract               @relation(fields: [contractId], references: [id])
+
+  acquisitionDate                   DateTime
+  additionalInformation             String?
+  allowedDataModifications          DataModificationType[]
+  allowedStorageCountries           String[]
+  allowedStorageMethod              StorageMethod
+  allowedUsages                     DataUsageType[]
+  autoRenewalDate                   DateTime?
+  contractExpirationDate            DateTime?
+  contractLocation                  String
+  createdBy                         String?                @db.VarChar(255)
+  dataOriginCountries               String[]
+  displayName                       String                 @db.VarChar(255)
+  licenseExpirationDate             DateTime?
+  licenseType                       LicenseType
+  mayAutoRenew                      Trilean
+  mayModifyData                     Trilean
+  mustDestroy                       Trilean
+  mustNotifyOnDeidFailure           Boolean
+  mustNotifyOnDeidFailureWithinDays Int?
+  name                              String                 @db.VarChar(255)
+  phiDeidMethod                     PhiDeidMethod
+  phiDeidHipaaMethod                PhiDeidHipaaMethod?
+  phiDeidOtherMethod                String?
+  status                            ContractStatus
+  version                           Int?
 }

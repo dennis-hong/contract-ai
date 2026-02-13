@@ -8,8 +8,9 @@ interface StatusBadgeProps {
 
 const statusStyles: Record<string, string> = {
   parsing: "bg-yellow-100 text-yellow-800 border-yellow-200",
-  review: "bg-blue-100 text-blue-800 border-blue-200",
-  saved: "bg-green-100 text-green-800 border-green-200",
+  draft: "bg-gray-100 text-gray-800 border-gray-200",
+  in_review: "bg-blue-100 text-blue-800 border-blue-200",
+  finalized: "bg-green-100 text-green-800 border-green-200",
 };
 
 export default function StatusBadge({ status }: StatusBadgeProps) {
@@ -17,8 +18,9 @@ export default function StatusBadge({ status }: StatusBadgeProps) {
 
   const statusLabels: Record<string, string> = {
     parsing: t.status.parsing,
-    review: t.status.review,
-    saved: t.status.saved,
+    draft: t.status.draft,
+    in_review: t.status.inReview,
+    finalized: t.status.finalized,
   };
 
   const label = statusLabels[status] ?? status;
@@ -31,12 +33,9 @@ export default function StatusBadge({ status }: StatusBadgeProps) {
       {status === "parsing" && (
         <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-pulse" />
       )}
-      {status === "review" && (
-        <span className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
-      )}
-      {status === "saved" && (
-        <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-      )}
+      {status === "draft" && <span className="w-1.5 h-1.5 bg-gray-500 rounded-full" />}
+      {status === "in_review" && <span className="w-1.5 h-1.5 bg-blue-500 rounded-full" />}
+      {status === "finalized" && <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />}
       {label}
     </span>
   );

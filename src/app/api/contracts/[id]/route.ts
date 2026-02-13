@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import {
+  parseContractDataInput,
+  toContractDataUpdateInput,
+  toContractDataWriteInput,
+  toContractRecord,
+} from "@/lib/contract-data";
 
 export async function GET(
   _request: NextRequest,
@@ -9,6 +15,13 @@ export async function GET(
     const { id } = await params;
     const contract = await prisma.contract.findUnique({
       where: { id },
+      include: {
+        vendor: true,
+        contractData: {
+          orderBy: { updatedAt: "desc" },
+          take: 1,
+        },
+      },
     });
 
     if (!contract) {
@@ -18,7 +31,7 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(contract);
+    return NextResponse.json(toContractRecord(contract));
   } catch (error) {
     console.error("Get contract error:", error);
     return NextResponse.json(
@@ -34,10 +47,19 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-    const body = await request.json();
+    const body = (await request.json()) as {
+      vendorName?: unknown;
+      data?: unknown;
+    };
 
     const existing = await prisma.contract.findUnique({
       where: { id },
+      include: {
+        contractData: {
+          orderBy: { updatedAt: "desc" },
+          take: 1,
+        },
+      },
     });
 
     if (!existing) {
@@ -47,30 +69,44 @@ export async function PUT(
       );
     }
 
-    const contract = await prisma.contract.update({
+    const vendorName = typeof body.vendorName === "string" ? body.vendorName.trim() : "";
+    const parsedData = parseContractDataInput(body.data);
+    const latestData = existing.contractData[0] ?? null;
+
+    const updated = await prisma.contract.update({
       where: { id },
       data: {
-        contractName: body.contractName,
-        partyACompany: body.partyACompany,
-        partyARepresentative: body.partyARepresentative,
-        partyAAddress: body.partyAAddress,
-        partyABusinessNo: body.partyABusinessNo,
-        partyBCompany: body.partyBCompany,
-        partyBRepresentative: body.partyBRepresentative,
-        partyBAddress: body.partyBAddress,
-        partyBBusinessNo: body.partyBBusinessNo,
-        dataScope: body.dataScope,
-        recordCount: body.recordCount,
-        contractAmount: body.contractAmount,
-        startDate: body.startDate,
-        endDate: body.endDate,
-        securityLevel: body.securityLevel,
-        specialTerms: body.specialTerms,
-        status: body.status ?? "saved",
+        vendor: vendorName
+          ? {
+              connectOrCreate: {
+                where: { name: vendorName },
+                create: { name: vendorName },
+              },
+            }
+          : {
+              disconnect: true,
+            },
+        contractData: latestData
+          ? {
+              update: {
+                where: { id: latestData.id },
+                data: toContractDataUpdateInput(parsedData),
+              },
+            }
+          : {
+              create: toContractDataWriteInput(parsedData),
+            },
+      },
+      include: {
+        vendor: true,
+        contractData: {
+          orderBy: { updatedAt: "desc" },
+          take: 1,
+        },
       },
     });
 
-    return NextResponse.json(contract);
+    return NextResponse.json(toContractRecord(updated));
   } catch (error) {
     console.error("Update contract error:", error);
     return NextResponse.json(

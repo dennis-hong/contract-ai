@@ -69,8 +69,9 @@ export const translations = {
     },
     status: {
       parsing: "Parsing",
-      review: "Review",
-      saved: "Saved",
+      draft: "Draft",
+      inReview: "In Review",
+      finalized: "Finalized",
     },
     lang: {
       toggle: "KO",
@@ -146,8 +147,9 @@ export const translations = {
     },
     status: {
       parsing: "파싱 중",
-      review: "검토 대기",
-      saved: "저장 완료",
+      draft: "초안",
+      inReview: "검토 중",
+      finalized: "최종 완료",
     },
     lang: {
       toggle: "EN",

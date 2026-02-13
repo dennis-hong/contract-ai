@@ -41,7 +41,7 @@ function UploadPageContent() {
 
     const interval = setInterval(async () => {
       const data = await fetchContract(contractId);
-      if (data && data.status !== "parsing") {
+      if (data && data.contractDataId) {
         setPolling(false);
       }
     }, 1500);
@@ -109,7 +109,7 @@ function UploadPageContent() {
         </div>
       )}
 
-      {contractId && contract?.status === "parsing" && (
+      {contractId && contract && !contract.contractDataId && (
         <div className="max-w-2xl mx-auto">
           <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
             <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
@@ -126,7 +126,7 @@ function UploadPageContent() {
         </div>
       )}
 
-      {contractId && contract && contract.status !== "parsing" && (
+      {contractId && contract && contract.contractDataId && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>
             <div className="flex items-center justify-between mb-3">
@@ -137,7 +137,7 @@ function UploadPageContent() {
                 <span className="text-xs text-gray-500">
                   {contract.fileName}
                 </span>
-                <StatusBadge status={contract.status} />
+                <StatusBadge status={contract.data.status} />
               </div>
             </div>
             <PDFViewer contractId={contractId} />

@@ -9,7 +9,8 @@
     "lint": "eslint",
     "db:migrate": "npx prisma migrate dev",
     "db:push": "npx prisma db push",
-    "generate-pdf": "node scripts/generate-sample-pdf.js"
+    "generate-pdf": "node scripts/generate-sample-pdf.js",
+    "generate-pdf:schema": "node scripts/generate-medical-schema-sample-pdf.js"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.4.0",

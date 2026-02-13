@@ -1,8 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ContractStatus,
+  DataModificationType,
+  DataUsageType,
+  LicenseType,
+  PhiDeidHipaaMethod,
+  PhiDeidMethod,
+  StorageMethod,
+  Trilean,
+} from "@/generated/prisma/enums";
 import { useTranslation } from "@/lib/i18n/context";
-import type { ContractRecord } from "@/types";
+import type { ContractDataInput, ContractRecord } from "@/types";
 
 interface ContractFormProps {
   contract: ContractRecord;
@@ -10,35 +20,78 @@ interface ContractFormProps {
   onReparse: () => void;
 }
 
-interface FieldConfig {
-  key: keyof ContractRecord;
-  labelKey: "companyName" | "representative" | "address" | "businessNo" | "dataScope" | "recordCount" | "contractAmount" | "startDate" | "endDate" | "securityLevel" | "specialTerms";
-  type?: "text" | "textarea" | "date";
+const COUNTRY_OPTIONS = [
+  "US",
+  "KR",
+  "JP",
+  "CA",
+  "UK",
+  "DE",
+  "FR",
+  "SG",
+  "AU",
+];
+
+const enumLabel = (value: string) =>
+  value
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+
+function MultiSelect({
+  value,
+  options,
+  onChange,
+}: {
+  value: string[];
+  options: readonly string[];
+  onChange: (next: string[]) => void;
+}) {
+  return (
+    <select
+      multiple
+      value={value}
+      onChange={(e) => {
+        const selected = Array.from(e.target.selectedOptions).map((opt) => opt.value);
+        onChange(selected);
+      }}
+      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm min-h-28 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+    >
+      {options.map((option) => (
+        <option key={option} value={option}>
+          {enumLabel(option)}
+        </option>
+      ))}
+    </select>
+  );
 }
 
-const partyAFields: FieldConfig[] = [
-  { key: "partyACompany", labelKey: "companyName" },
-  { key: "partyARepresentative", labelKey: "representative" },
-  { key: "partyAAddress", labelKey: "address" },
-  { key: "partyABusinessNo", labelKey: "businessNo" },
-];
+function Select({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: readonly string[];
+  onChange: (next: string) => void;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+    >
+      {options.map((option) => (
+        <option key={option} value={option}>
+          {option ? enumLabel(option) : "Not specified"}
+        </option>
+      ))}
+    </select>
+  );
+}
 
-const partyBFields: FieldConfig[] = [
-  { key: "partyBCompany", labelKey: "companyName" },
-  { key: "partyBRepresentative", labelKey: "representative" },
-  { key: "partyBAddress", labelKey: "address" },
-  { key: "partyBBusinessNo", labelKey: "businessNo" },
-];
-
-const dataFields: FieldConfig[] = [
-  { key: "dataScope", labelKey: "dataScope", type: "textarea" },
-  { key: "recordCount", labelKey: "recordCount" },
-  { key: "contractAmount", labelKey: "contractAmount" },
-  { key: "startDate", labelKey: "startDate" },
-  { key: "endDate", labelKey: "endDate" },
-  { key: "securityLevel", labelKey: "securityLevel" },
-  { key: "specialTerms", labelKey: "specialTerms", type: "textarea" },
-];
+const textInputClass =
+  "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all";
 
 export default function ContractForm({
   contract,
@@ -51,10 +104,22 @@ export default function ContractForm({
   const [reparsing, setReparsing] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  const updateField = (key: keyof ContractRecord, value: string) => {
+  useEffect(() => {
+    setFormData(contract);
+  }, [contract]);
+
+  const updateData = <K extends keyof ContractDataInput>(key: K, value: ContractDataInput[K]) => {
+    setFormData((prev) => ({ ...prev, data: { ...prev.data, [key]: value } }));
+    setSaveSuccess(false);
+  };
+
+  const updateTopLevel = (key: "vendorName", value: string) => {
     setFormData((prev) => ({ ...prev, [key]: value }));
     setSaveSuccess(false);
   };
+
+  const usageOptions = useMemo(() => Object.values(DataUsageType), []);
+  const modificationOptions = useMemo(() => Object.values(DataModificationType), []);
 
   const handleSave = async () => {
     setSaving(true);
@@ -62,10 +127,10 @@ export default function ContractForm({
       const res = await fetch(`/api/contracts/${contract.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...formData, status: "saved" }),
+        body: JSON.stringify(formData),
       });
       if (!res.ok) throw new Error(t.form.saveFailed);
-      const updated = await res.json();
+      const updated = (await res.json()) as ContractRecord;
       onSave(updated);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
@@ -83,8 +148,9 @@ export default function ContractForm({
         method: "POST",
       });
       if (!res.ok) throw new Error(t.form.reparseFailed);
-      const updated = await res.json();
+      const updated = (await res.json()) as ContractRecord;
       setFormData(updated);
+      onSave(updated);
       onReparse();
     } catch (err) {
       alert(err instanceof Error ? err.message : t.form.reparseFailed);
@@ -93,79 +159,267 @@ export default function ContractForm({
     }
   };
 
-  const renderField = ({ key, labelKey, type = "text" }: FieldConfig) => (
-    <div key={key}>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        {t.form[labelKey]}
-      </label>
-      {type === "textarea" ? (
-        <textarea
-          value={(formData[key] as string) ?? ""}
-          onChange={(e) => updateField(key, e.target.value)}
-          rows={3}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all resize-none"
-        />
-      ) : (
-        <input
-          type="text"
-          value={(formData[key] as string) ?? ""}
-          onChange={(e) => updateField(key, e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-        />
-      )}
-    </div>
-  );
-
   return (
-    <div className="space-y-6">
-      {/* Contract Name */}
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Vendor Name</label>
+          <input
+            type="text"
+            value={formData.vendorName}
+            onChange={(e) => updateTopLevel("vendorName", e.target.value)}
+            className={textInputClass}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
+          <input
+            type="text"
+            value={formData.data.displayName}
+            onChange={(e) => updateData("displayName", e.target.value)}
+            className={textInputClass}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Contract Name</label>
+          <input
+            type="text"
+            value={formData.data.name}
+            onChange={(e) => updateData("name", e.target.value)}
+            className={textInputClass}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Created By</label>
+          <input
+            type="text"
+            value={formData.data.createdBy}
+            onChange={(e) => updateData("createdBy", e.target.value)}
+            className={textInputClass}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Acquisition Date</label>
+          <input
+            type="date"
+            value={formData.data.acquisitionDate}
+            onChange={(e) => updateData("acquisitionDate", e.target.value)}
+            className={textInputClass}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Auto Renewal Date</label>
+          <input
+            type="date"
+            value={formData.data.autoRenewalDate}
+            onChange={(e) => updateData("autoRenewalDate", e.target.value)}
+            className={textInputClass}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Contract Expiration</label>
+          <input
+            type="date"
+            value={formData.data.contractExpirationDate}
+            onChange={(e) => updateData("contractExpirationDate", e.target.value)}
+            className={textInputClass}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">License Expiration</label>
+          <input
+            type="date"
+            value={formData.data.licenseExpirationDate}
+            onChange={(e) => updateData("licenseExpirationDate", e.target.value)}
+            className={textInputClass}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Contract Location</label>
+          <input
+            type="text"
+            value={formData.data.contractLocation}
+            onChange={(e) => updateData("contractLocation", e.target.value)}
+            className={textInputClass}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Allowed Data Modifications</label>
+          <MultiSelect
+            value={formData.data.allowedDataModifications}
+            options={modificationOptions}
+            onChange={(next) => updateData("allowedDataModifications", next as ContractDataInput["allowedDataModifications"])}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Allowed Usages</label>
+          <MultiSelect
+            value={formData.data.allowedUsages}
+            options={usageOptions}
+            onChange={(next) => updateData("allowedUsages", next as ContractDataInput["allowedUsages"])}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Allowed Storage Countries</label>
+          <MultiSelect
+            value={formData.data.allowedStorageCountries}
+            options={COUNTRY_OPTIONS}
+            onChange={(next) => updateData("allowedStorageCountries", next)}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Data Origin Countries</label>
+          <MultiSelect
+            value={formData.data.dataOriginCountries}
+            options={COUNTRY_OPTIONS}
+            onChange={(next) => updateData("dataOriginCountries", next)}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Storage Method</label>
+          <Select
+            value={formData.data.allowedStorageMethod}
+            options={Object.values(StorageMethod)}
+            onChange={(next) => updateData("allowedStorageMethod", next as ContractDataInput["allowedStorageMethod"])}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">License Type</label>
+          <Select
+            value={formData.data.licenseType}
+            options={Object.values(LicenseType)}
+            onChange={(next) => updateData("licenseType", next as ContractDataInput["licenseType"])}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+          <Select
+            value={formData.data.status}
+            options={Object.values(ContractStatus)}
+            onChange={(next) => updateData("status", next as ContractDataInput["status"])}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">May Auto Renew</label>
+          <Select
+            value={formData.data.mayAutoRenew}
+            options={Object.values(Trilean)}
+            onChange={(next) => updateData("mayAutoRenew", next as ContractDataInput["mayAutoRenew"])}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">May Modify Data</label>
+          <Select
+            value={formData.data.mayModifyData}
+            options={Object.values(Trilean)}
+            onChange={(next) => updateData("mayModifyData", next as ContractDataInput["mayModifyData"])}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Must Destroy</label>
+          <Select
+            value={formData.data.mustDestroy}
+            options={Object.values(Trilean)}
+            onChange={(next) => updateData("mustDestroy", next as ContractDataInput["mustDestroy"])}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">PHI De-ID Method</label>
+          <Select
+            value={formData.data.phiDeidMethod}
+            options={Object.values(PhiDeidMethod)}
+            onChange={(next) => updateData("phiDeidMethod", next as ContractDataInput["phiDeidMethod"])}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">HIPAA Method</label>
+          <Select
+            value={formData.data.phiDeidHipaaMethod}
+            options={["", ...Object.values(PhiDeidHipaaMethod)]}
+            onChange={(next) => updateData("phiDeidHipaaMethod", next as ContractDataInput["phiDeidHipaaMethod"])}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="flex items-center gap-2 pt-7">
+          <input
+            id="mustNotifyOnDeidFailure"
+            type="checkbox"
+            checked={formData.data.mustNotifyOnDeidFailure}
+            onChange={(e) => updateData("mustNotifyOnDeidFailure", e.target.checked)}
+            className="h-4 w-4"
+          />
+          <label htmlFor="mustNotifyOnDeidFailure" className="text-sm text-gray-700">
+            Must Notify on De-ID Failure
+          </label>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Notify Within Days</label>
+          <input
+            type="number"
+            min={0}
+            value={formData.data.mustNotifyOnDeidFailureWithinDays}
+            onChange={(e) => updateData("mustNotifyOnDeidFailureWithinDays", e.target.value)}
+            className={textInputClass}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Version</label>
+          <input
+            type="number"
+            min={0}
+            value={formData.data.version}
+            onChange={(e) => updateData("version", e.target.value)}
+            className={textInputClass}
+          />
+        </div>
+      </div>
+
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          {t.form.contractName}
-        </label>
-        <input
-          type="text"
-          value={formData.contractName ?? ""}
-          onChange={(e) => updateField("contractName", e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+        <label className="block text-sm font-medium text-gray-700 mb-1">Additional Information</label>
+        <textarea
+          value={formData.data.additionalInformation}
+          onChange={(e) => updateData("additionalInformation", e.target.value)}
+          rows={3}
+          className={`${textInputClass} resize-none`}
         />
       </div>
 
-      {/* Party A */}
-      <div className="bg-blue-50 rounded-lg p-4 space-y-3">
-        <h3 className="text-sm font-semibold text-blue-900 flex items-center gap-2">
-          <span className="w-6 h-6 bg-blue-600 text-white rounded flex items-center justify-center text-xs font-bold">
-            {t.form.partyA}
-          </span>
-          {t.form.partyALabel}
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {partyAFields.map(renderField)}
-        </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Other PHI De-ID Method</label>
+        <textarea
+          value={formData.data.phiDeidOtherMethod}
+          onChange={(e) => updateData("phiDeidOtherMethod", e.target.value)}
+          rows={2}
+          className={`${textInputClass} resize-none`}
+        />
       </div>
 
-      {/* Party B */}
-      <div className="bg-emerald-50 rounded-lg p-4 space-y-3">
-        <h3 className="text-sm font-semibold text-emerald-900 flex items-center gap-2">
-          <span className="w-6 h-6 bg-emerald-600 text-white rounded flex items-center justify-center text-xs font-bold">
-            {t.form.partyB}
-          </span>
-          {t.form.partyBLabel}
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {partyBFields.map(renderField)}
-        </div>
-      </div>
-
-      {/* Data Details */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-semibold text-gray-900">{t.form.contractDetails}</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {dataFields.map(renderField)}
-        </div>
-      </div>
-
-      {/* Actions */}
       <div className="flex items-center gap-3 pt-4 border-t border-gray-200">
         <button
           onClick={handleSave}

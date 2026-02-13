@@ -11,6 +11,10 @@ export async function GET(
     const { id } = await params;
     const contract = await prisma.contract.findUnique({
       where: { id },
+      select: {
+        filePath: true,
+        fileName: true,
+      },
     });
 
     if (!contract) {
@@ -20,13 +24,20 @@ export async function GET(
       );
     }
 
+    if (!contract.filePath) {
+      return NextResponse.json(
+        { error: "Contract file is missing" },
+        { status: 400 }
+      );
+    }
+
     const filePath = path.join(process.cwd(), "uploads", contract.filePath);
     const fileBuffer = await readFile(filePath);
 
     return new NextResponse(fileBuffer, {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="${contract.fileName}"`,
+        "Content-Disposition": `inline; filename="${contract.fileName ?? "contract.pdf"}"`,
       },
     });
   } catch (error) {

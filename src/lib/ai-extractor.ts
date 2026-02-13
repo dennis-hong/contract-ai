@@ -1,59 +1,178 @@
 import OpenAI from "openai";
+import {
+  ContractStatus,
+  DataModificationType,
+  DataUsageType,
+  LicenseType,
+  PhiDeidHipaaMethod,
+  PhiDeidMethod,
+  StorageMethod,
+  Trilean,
+} from "@/generated/prisma/enums";
+import {
+  defaultExtractedContractData,
+  type ExtractedContractData,
+} from "@/lib/contract-data";
 
-export interface ExtractedContractData {
-  contractName: string | null;
-  partyACompany: string | null;
-  partyARepresentative: string | null;
-  partyAAddress: string | null;
-  partyABusinessNo: string | null;
-  partyBCompany: string | null;
-  partyBRepresentative: string | null;
-  partyBAddress: string | null;
-  partyBBusinessNo: string | null;
-  dataScope: string | null;
-  recordCount: string | null;
-  contractAmount: string | null;
-  startDate: string | null;
-  endDate: string | null;
-  securityLevel: string | null;
-  specialTerms: string | null;
-}
+const EXTRACTION_PROMPT = `You extract structured fields from medical data contracts.
+Return ONLY one valid JSON object.
 
-const EXTRACTION_PROMPT = `You are a contract data extraction assistant. You will be given the raw text of a medical data purchase agreement. The contract may be written in Korean (의료 데이터 구매 계약서) or English.
-
-For Korean contracts:
-- 갑 (甲) = Party A (Buyer/Purchaser)
-- 을 (乙) = Party B (Seller/Provider)
-- 사업자등록번호 = Business Registration Number
-
-For English contracts:
-- Party A / Buyer / Purchaser = 갑
-- Party B / Seller / Provider = 을
-- EIN / Tax ID / Registration No. = Business Registration Number
-
-Extract the following fields from the contract text. Return ONLY valid JSON with these exact keys:
-
+Required JSON shape:
 {
-  "contractName": "Contract title/name",
-  "partyACompany": "Party A (Buyer) company name",
-  "partyARepresentative": "Party A representative",
-  "partyAAddress": "Party A address",
-  "partyABusinessNo": "Party A business/tax registration number",
-  "partyBCompany": "Party B (Seller) company name",
-  "partyBRepresentative": "Party B representative",
-  "partyBAddress": "Party B address",
-  "partyBBusinessNo": "Party B business/tax registration number",
-  "dataScope": "Data scope (type, period, subjects - summarize)",
-  "recordCount": "Number of data records",
-  "contractAmount": "Contract amount (include currency)",
-  "startDate": "Contract start date (YYYY-MM-DD)",
-  "endDate": "Contract end date (YYYY-MM-DD)",
-  "securityLevel": "Security level/classification",
-  "specialTerms": "Special terms (summarize key points)"
+  "vendorName": string | null,
+  "acquisitionDate": "YYYY-MM-DD" | null,
+  "additionalInformation": string | null,
+  "allowedDataModifications": DataModificationType[],
+  "allowedStorageCountries": string[],
+  "allowedStorageMethod": StorageMethod,
+  "allowedUsages": DataUsageType[],
+  "autoRenewalDate": "YYYY-MM-DD" | null,
+  "contractExpirationDate": "YYYY-MM-DD" | null,
+  "contractLocation": string | null,
+  "createdBy": string | null,
+  "dataOriginCountries": string[],
+  "displayName": string | null,
+  "licenseExpirationDate": "YYYY-MM-DD" | null,
+  "licenseType": LicenseType,
+  "mayAutoRenew": Trilean,
+  "mayModifyData": Trilean,
+  "mustDestroy": Trilean,
+  "mustNotifyOnDeidFailure": boolean,
+  "mustNotifyOnDeidFailureWithinDays": number | null,
+  "name": string | null,
+  "phiDeidMethod": PhiDeidMethod,
+  "phiDeidHipaaMethod": PhiDeidHipaaMethod | null,
+  "phiDeidOtherMethod": string | null,
+  "status": ContractStatus,
+  "version": number | null
 }
 
-If a field cannot be found, set its value to null.
-Return ONLY the JSON object, no additional text.`;
+Enums:
+- ContractStatus: draft | in_review | finalized
+- LicenseType: limited | perpetual | ownership
+- Trilean: true | false | not_specified
+- StorageMethod: cloud | on_premise | not_specified | others
+- DataUsageType: academic_analysis | commercial_product_development | internal_research | validation_only
+- DataModificationType: copy | modify_clinical_data | modify_dicom_tags | modify_format | modify_pixels | not_specified
+- PhiDeidMethod: anonymization | pseudonymization | hipaa_deidentification | other
+- PhiDeidHipaaMethod: safe_harbor | expert_determination
+
+Rules:
+- If unknown, use null for nullable fields.
+- For enum fields with unknown values, use not_specified where possible.
+- status should default to in_review unless clearly finalized.
+- mustNotifyOnDeidFailure must be true only when explicit notice obligation exists.
+- Arrays must contain unique values.
+- Do not add extra keys.`;
+
+const enumValues = <T extends Record<string, string>>(enumObj: T) =>
+  Object.values(enumObj) as T[keyof T][];
+
+function coerceEnum<T extends Record<string, string>>(
+  value: unknown,
+  enumObj: T,
+  fallback: T[keyof T]
+): T[keyof T] {
+  if (typeof value !== "string") return fallback;
+  return enumValues(enumObj).includes(value as T[keyof T])
+    ? (value as T[keyof T])
+    : fallback;
+}
+
+function coerceEnumArray<T extends Record<string, string>>(
+  value: unknown,
+  enumObj: T
+): T[keyof T][] {
+  if (!Array.isArray(value)) return [];
+  const allowed = new Set(enumValues(enumObj));
+  return value.filter(
+    (entry): entry is T[keyof T] =>
+      typeof entry === "string" && allowed.has(entry as T[keyof T])
+  );
+}
+
+function uniqueStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value)]
+    .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+    .filter(Boolean);
+}
+
+function parseDate(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? trimmed : null;
+}
+
+function normalizeExtracted(raw: unknown): ExtractedContractData {
+  const defaults = defaultExtractedContractData();
+  const parsed = (raw ?? {}) as Record<string, unknown>;
+
+  return {
+    vendorName: typeof parsed.vendorName === "string" ? parsed.vendorName.trim() : null,
+    acquisitionDate: parseDate(parsed.acquisitionDate),
+    additionalInformation:
+      typeof parsed.additionalInformation === "string"
+        ? parsed.additionalInformation.trim()
+        : null,
+    allowedDataModifications: (() => {
+      const values = coerceEnumArray(parsed.allowedDataModifications, DataModificationType);
+      return values.length > 0 ? values : defaults.allowedDataModifications;
+    })(),
+    allowedStorageCountries: uniqueStringArray(parsed.allowedStorageCountries),
+    allowedStorageMethod: coerceEnum(
+      parsed.allowedStorageMethod,
+      StorageMethod,
+      defaults.allowedStorageMethod
+    ),
+    allowedUsages: (() => {
+      const values = coerceEnumArray(parsed.allowedUsages, DataUsageType);
+      return values.length > 0 ? values : defaults.allowedUsages;
+    })(),
+    autoRenewalDate: parseDate(parsed.autoRenewalDate),
+    contractExpirationDate: parseDate(parsed.contractExpirationDate),
+    contractLocation:
+      typeof parsed.contractLocation === "string"
+        ? parsed.contractLocation.trim()
+        : null,
+    createdBy: typeof parsed.createdBy === "string" ? parsed.createdBy.trim() : null,
+    dataOriginCountries: uniqueStringArray(parsed.dataOriginCountries),
+    displayName:
+      typeof parsed.displayName === "string" ? parsed.displayName.trim() : null,
+    licenseExpirationDate: parseDate(parsed.licenseExpirationDate),
+    licenseType: coerceEnum(parsed.licenseType, LicenseType, defaults.licenseType),
+    mayAutoRenew: coerceEnum(parsed.mayAutoRenew, Trilean, defaults.mayAutoRenew),
+    mayModifyData: coerceEnum(parsed.mayModifyData, Trilean, defaults.mayModifyData),
+    mustDestroy: coerceEnum(parsed.mustDestroy, Trilean, defaults.mustDestroy),
+    mustNotifyOnDeidFailure: Boolean(parsed.mustNotifyOnDeidFailure),
+    mustNotifyOnDeidFailureWithinDays:
+      typeof parsed.mustNotifyOnDeidFailureWithinDays === "number"
+        ? parsed.mustNotifyOnDeidFailureWithinDays
+        : null,
+    name: typeof parsed.name === "string" ? parsed.name.trim() : null,
+    phiDeidMethod: coerceEnum(
+      parsed.phiDeidMethod,
+      PhiDeidMethod,
+      defaults.phiDeidMethod
+    ),
+    phiDeidHipaaMethod: (() => {
+      const value = coerceEnum(
+        parsed.phiDeidHipaaMethod,
+        PhiDeidHipaaMethod,
+        PhiDeidHipaaMethod.safe_harbor
+      );
+      return parsed.phiDeidHipaaMethod ? value : null;
+    })(),
+    phiDeidOtherMethod:
+      typeof parsed.phiDeidOtherMethod === "string"
+        ? parsed.phiDeidOtherMethod.trim()
+        : null,
+    status: coerceEnum(parsed.status, ContractStatus, ContractStatus.in_review),
+    version: typeof parsed.version === "number" ? parsed.version : null,
+  };
+}
 
 export async function extractContractData(
   rawText: string
@@ -82,137 +201,29 @@ export async function extractContractData(
     throw new Error("No response from OpenAI");
   }
 
-  return JSON.parse(content) as ExtractedContractData;
+  return normalizeExtracted(JSON.parse(content));
 }
 
 function fallbackExtraction(rawText: string): ExtractedContractData {
-  const extract = (pattern: RegExp): string | null => {
-    const match = rawText.match(pattern);
-    return match ? match[1]?.trim() ?? null : null;
-  };
-
-  // Detect language
+  const defaults = defaultExtractedContractData();
   const isKorean = /[가-힣]/.test(rawText);
 
-  let contractName: string | null;
-  let partyACompany: string | null;
-  let partyARepresentative: string | null;
-  let partyAAddress: string | null;
-  let partyABusinessNo: string | null;
-  let partyBCompany: string | null;
-  let partyBRepresentative: string | null;
-  let partyBAddress: string | null;
-  let partyBBusinessNo: string | null;
-  let dataScope: string | null;
-  let recordCount: string | null;
-  let contractAmount: string | null;
-  let startDate: string | null;
-  let endDate: string | null;
-  let securityLevel: string | null;
-  let specialTerms: string | null;
+  const displayName =
+    rawText.match(isKorean ? /^(.*계약서.*)$/m : /^(.*(?:Agreement|Contract).*)$/im)?.[1]?.trim() ||
+    null;
 
-  if (isKorean) {
-    contractName =
-      extract(/^(.*계약서.*)$/m) ?? "의료 데이터 구매 계약서";
-
-    partyACompany =
-      extract(/갑.*?구매자.*?\n\s*회사명[:\s]*(.+)/m) ??
-      extract(/구매자.*?\n\s*회사명[:\s]*(.+)/m);
-    partyARepresentative =
-      extract(/갑.*?구매자[\s\S]*?대표자[:\s]*(.+)/m);
-    partyAAddress =
-      extract(/갑.*?구매자[\s\S]*?주소[:\s]*(.+)/m);
-    partyABusinessNo =
-      extract(/갑.*?구매자[\s\S]*?사업자등록번호[:\s]*([\d-]+)/m);
-
-    partyBCompany =
-      extract(/을.*?판매자.*?\n\s*회사명[:\s]*(.+)/m) ??
-      extract(/판매자.*?\n\s*회사명[:\s]*(.+)/m);
-    partyBRepresentative =
-      extract(/을.*?판매자[\s\S]*?대표자[:\s]*(.+)/m);
-    partyBAddress =
-      extract(/을.*?판매자[\s\S]*?주소[:\s]*(.+)/m);
-    partyBBusinessNo =
-      extract(/을.*?판매자[\s\S]*?사업자등록번호[:\s]*([\d-]+)/m);
-
-    dataScope = extract(/데이터\s*유형[:\s]*(.+)/m);
-    recordCount =
-      extract(/데이터\s*건수[:\s]*(?:총\s*)?(.+)/m) ??
-      extract(/총\s*([\d,]+)\s*건/m);
-    contractAmount =
-      extract(/총\s*계약\s*금액[:\s]*(.+)/m) ??
-      extract(/계약\s*금액[:\s]*(.+)/m);
-    startDate = extract(/계약\s*시작일[:\s]*(.+)/m);
-    endDate = extract(/계약\s*종료일[:\s]*(.+)/m);
-    securityLevel = extract(/보안\s*등급[:\s]*(.+)/m);
-
-    const specialTermsMatch = rawText.match(
-      /특약사항[\s\S]*?((?:\d+\..*\n?)+)/m
-    );
-    specialTerms = specialTermsMatch
-      ? specialTermsMatch[1]?.trim() ?? null
-      : null;
-  } else {
-    contractName =
-      extract(/^(.*(?:Agreement|Contract).*)$/im) ?? "Medical Data Purchase Agreement";
-
-    partyACompany =
-      extract(/(?:Party\s*A|Buyer|Purchaser).*?(?:Company|Name)[:\s]*(.+)/im) ??
-      extract(/(?:Party\s*A|Buyer|Purchaser)[:\s]*(.+)/im);
-    partyARepresentative =
-      extract(/(?:Party\s*A|Buyer)[\s\S]*?(?:Representative|CEO|Director)[:\s]*(.+)/im);
-    partyAAddress =
-      extract(/(?:Party\s*A|Buyer)[\s\S]*?(?:Address)[:\s]*(.+)/im);
-    partyABusinessNo =
-      extract(/(?:Party\s*A|Buyer)[\s\S]*?(?:EIN|Tax\s*ID|Registration)[:\s]*([\d-]+)/im);
-
-    partyBCompany =
-      extract(/(?:Party\s*B|Seller|Provider).*?(?:Company|Name)[:\s]*(.+)/im) ??
-      extract(/(?:Party\s*B|Seller|Provider)[:\s]*(.+)/im);
-    partyBRepresentative =
-      extract(/(?:Party\s*B|Seller)[\s\S]*?(?:Representative|CEO|Director)[:\s]*(.+)/im);
-    partyBAddress =
-      extract(/(?:Party\s*B|Seller)[\s\S]*?(?:Address)[:\s]*(.+)/im);
-    partyBBusinessNo =
-      extract(/(?:Party\s*B|Seller)[\s\S]*?(?:EIN|Tax\s*ID|Registration)[:\s]*([\d-]+)/im);
-
-    dataScope = extract(/(?:Data\s*(?:Scope|Type))[:\s]*(.+)/im);
-    recordCount =
-      extract(/(?:Record\s*Count|Number\s*of\s*Records)[:\s]*(.+)/im) ??
-      extract(/([\d,]+)\s*records/im);
-    contractAmount =
-      extract(/(?:Total\s*(?:Contract\s*)?Amount|Contract\s*(?:Value|Price))[:\s]*(.+)/im);
-    startDate =
-      extract(/(?:Start\s*Date|Effective\s*Date|Commencement)[:\s]*(.+)/im);
-    endDate =
-      extract(/(?:End\s*Date|Expiration|Termination\s*Date)[:\s]*(.+)/im);
-    securityLevel =
-      extract(/(?:Security\s*(?:Level|Classification))[:\s]*(.+)/im);
-
-    const specialTermsMatch = rawText.match(
-      /(?:Special\s*Terms|Additional\s*Provisions)[\s\S]*?((?:\d+\..*\n?)+)/im
-    );
-    specialTerms = specialTermsMatch
-      ? specialTermsMatch[1]?.trim() ?? null
-      : null;
-  }
+  const vendorName =
+    rawText.match(
+      isKorean
+        ? /"을".*?\n\s*(?:회사명|기관명)[:\s]*(.+)/m
+        : /(?:Party\s*B|Seller|Provider).*?(?:Company|Name)[:\s]*(.+)/im
+    )?.[1]?.trim() || null;
 
   return {
-    contractName,
-    partyACompany,
-    partyARepresentative,
-    partyAAddress,
-    partyABusinessNo,
-    partyBCompany,
-    partyBRepresentative,
-    partyBAddress,
-    partyBBusinessNo,
-    dataScope,
-    recordCount,
-    contractAmount,
-    startDate,
-    endDate,
-    securityLevel,
-    specialTerms,
+    ...defaults,
+    vendorName,
+    displayName,
+    name: displayName,
+    status: ContractStatus.in_review,
   };
 }

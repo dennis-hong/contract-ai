@@ -4,20 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import StatusBadge from "@/components/StatusBadge";
 import { useTranslation } from "@/lib/i18n/context";
-
-interface ContractListItem {
-  id: string;
-  status: string;
-  fileName: string;
-  contractName: string | null;
-  partyACompany: string | null;
-  partyBCompany: string | null;
-  contractAmount: string | null;
-  startDate: string | null;
-  endDate: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
+import type { ContractListItem } from "@/types";
 
 export default function ContractsPage() {
   const [contracts, setContracts] = useState<ContractListItem[]>([]);
@@ -48,9 +35,7 @@ export default function ContractsPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{t.contracts.title}</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            {t.contracts.subtitle}
-          </p>
+          <p className="mt-1 text-sm text-gray-500">{t.contracts.subtitle}</p>
         </div>
         <Link
           href="/"
@@ -66,25 +51,8 @@ export default function ContractsPage() {
         </div>
       ) : contracts.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-          <svg
-            className="w-12 h-12 text-gray-300 mx-auto mb-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m6.75 12H9.75m3 0h3.75M9 15h3M15 12H9m6 3H9m12-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-            />
-          </svg>
-          <h3 className="text-lg font-medium text-gray-900 mb-1">
-            {t.contracts.noContracts}
-          </h3>
-          <p className="text-sm text-gray-500 mb-4">
-            {t.contracts.noContractsDesc}
-          </p>
+          <h3 className="text-lg font-medium text-gray-900 mb-1">{t.contracts.noContracts}</h3>
+          <p className="text-sm text-gray-500 mb-4">{t.contracts.noContractsDesc}</p>
           <Link
             href="/"
             className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
@@ -101,13 +69,10 @@ export default function ContractsPage() {
                   {t.contracts.contractName}
                 </th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  {t.contracts.partyABuyer}
+                  Vendor
                 </th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  {t.contracts.partyBSeller}
-                </th>
-                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  {t.contracts.amount}
+                  License
                 </th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   {t.contracts.status}
@@ -120,35 +85,17 @@ export default function ContractsPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {contracts.map((c) => (
-                <tr
-                  key={c.id}
-                  className="hover:bg-gray-50 transition-colors"
-                >
+                <tr key={c.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4">
-                    <div className="text-sm font-medium text-gray-900">
-                      {c.contractName || c.fileName}
-                    </div>
-                    {c.contractName && (
-                      <div className="text-xs text-gray-400 mt-0.5">
-                        {c.fileName}
-                      </div>
-                    )}
+                    <div className="text-sm font-medium text-gray-900">{c.displayName}</div>
+                    {c.fileName && <div className="text-xs text-gray-400 mt-0.5">{c.fileName}</div>}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-600">
-                    {c.partyACompany || "-"}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-600">
-                    {c.partyBCompany || "-"}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-600">
-                    {c.contractAmount || "-"}
-                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-600">{c.vendorName || "-"}</td>
+                  <td className="px-6 py-4 text-sm text-gray-600">{c.licenseType}</td>
                   <td className="px-6 py-4">
                     <StatusBadge status={c.status} />
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
-                    {formatDate(c.createdAt)}
-                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-500">{formatDate(c.createdAt)}</td>
                   <td className="px-6 py-4 text-right">
                     <Link
                       href={`/?id=${c.id}`}
