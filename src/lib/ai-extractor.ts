@@ -14,10 +14,10 @@ import {
   type ExtractedContractData,
 } from "@/lib/contract-data";
 
-const EXTRACTION_PROMPT = `You extract structured fields from medical data contracts.
-Return ONLY one valid JSON object.
+const EXTRACTION_PROMPT = `You are a medical data contract analyst. Extract structured fields from medical data contracts, SOWs (Statements of Work), license agreements, and data purchase agreements.
 
-Required JSON shape:
+Return ONLY one valid JSON object matching this schema:
+
 {
   "vendorName": string | null,
   "acquisitionDate": "YYYY-MM-DD" | null,
@@ -31,7 +31,7 @@ Required JSON shape:
   "contractLocation": string | null,
   "createdBy": string | null,
   "dataOriginCountries": string[],
-  "displayName": string | null,    // short display label (e.g. "NorthBridge Radiology Dataset License v3")
+  "displayName": string | null,
   "licenseExpirationDate": "YYYY-MM-DD" | null,
   "licenseType": LicenseType,
   "mayAutoRenew": Trilean,
@@ -39,7 +39,7 @@ Required JSON shape:
   "mustDestroy": Trilean,
   "mustNotifyOnDeidFailure": boolean,
   "mustNotifyOnDeidFailureWithinDays": number | null,
-  "name": string | null,          // internal contract name (e.g. "2026 NorthBridge Imaging Data License Agreement")
+  "name": string | null,
   "phiDeidMethod": PhiDeidMethod,
   "phiDeidHipaaMethod": PhiDeidHipaaMethod | null,
   "phiDeidOtherMethod": string | null,
@@ -57,14 +57,38 @@ Enums:
 - PhiDeidMethod: anonymization | pseudonymization | hipaa_deidentification | other
 - PhiDeidHipaaMethod: safe_harbor | expert_determination
 
-Rules:
+FIELD EXTRACTION GUIDE:
+- "vendorName": Look for "Vendor Name", "Prepared By", "Party B", "Seller", "Provider", "을" (Korean)
+- "name": Full document title or contract name (e.g. "Large Imaging Dataset Project - Alpha SOW"). Use document header, SOW title, or project name.
+- "displayName": Short label (e.g. "SOW-100001 V1.0 Alpha"). Use SOW number + version + short project name.
+- "acquisitionDate": "Effective Date", "Contract Date", "Execution Date", "계약일"
+- "contractExpirationDate": "End Date", "Expiration Date", "Term", "계약 만료일"
+- "contractLocation": Vendor or Client address/city/state, or jurisdiction clause
+- "createdBy": Vendor contact person name, or document preparer
+- "version": Version number from document header (e.g. "V 1.3" → 1, "V 2.1" → 2)
+- "dataOriginCountries": Geographic requirements section - look for country names, "United States", "US", "Korea", etc. Use 2-letter ISO codes.
+- "allowedStorageCountries": Where data may be stored - if delivery path mentions locations, use those. Otherwise infer from client address country.
+- "allowedStorageMethod": Look for delivery method - "secure_transfer", "S3", "cloud" → cloud; "physical media" → on_premise
+- "allowedUsages": Infer from project purpose - imaging AI → internal_research; academic publication → academic_analysis; product development → commercial_product_development; validation/testing → validation_only
+- "allowedDataModifications": Look for anonymization section - if DICOM headers modified → modify_dicom_tags; if pixel data masked → modify_pixels; if format conversion mentioned → modify_format; if copying allowed → copy; if clinical data modified → modify_clinical_data
+- "licenseType": "perpetual" if permanent; "limited" if time-bound or SOW-based; "ownership" if data ownership transfers
+- "mayModifyData": If anonymization/de-identification is performed → "true"
+- "mustDestroy": If data destruction after use is mentioned → "true"; otherwise "not_specified"
+- "phiDeidMethod": If HIPAA mentioned → "hipaa_deidentification"; if "anonymization" or "de-identification" → "anonymization"; if "pseudonymization" → "pseudonymization"
+- "phiDeidHipaaMethod": If Safe Harbor method mentioned → "safe_harbor"; if Expert Determination → "expert_determination"
+- "phiDeidOtherMethod": Any additional de-id details (e.g. "pixel masking", "burned-in text removal", "K-anonymity >= 15")
+- "mustNotifyOnDeidFailure": true if breach/failure notification obligation exists
+- "additionalInformation": Summarize key details not captured elsewhere: cohort sizes, inclusion/exclusion criteria, deliverables, special terms, dataset specifications
+
+RULES:
+- Extract as much as possible. Prefer partial data over null.
+- For SOW/Statement of Work documents: the vendor is the data provider (Prepared By), the client is the buyer (Prepared For).
 - If unknown, use null for nullable fields.
 - For enum fields with unknown values, use not_specified where possible.
-- status should default to in_review unless clearly finalized.
-- mustNotifyOnDeidFailure must be true only when explicit notice obligation exists.
+- status should default to "in_review" unless clearly finalized or signed.
 - Arrays must contain unique values.
 - Do not add extra keys.
-- "name" is the full contract title; "displayName" is a shorter label. Both should be extracted if available.`;
+- Support both English and Korean (한국어) documents.`;
 
 const enumValues = <T extends Record<string, string>>(enumObj: T) =>
   Object.values(enumObj) as T[keyof T][];
@@ -188,10 +212,10 @@ export async function extractContractData(
   const openai = new OpenAI({ apiKey });
 
   const response = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: "gpt-4o",
     messages: [
       { role: "system", content: EXTRACTION_PROMPT },
-      { role: "user", content: rawText },
+      { role: "user", content: rawText.slice(0, 30000) },
     ],
     temperature: 0,
     response_format: { type: "json_object" },
@@ -209,22 +233,40 @@ function fallbackExtraction(rawText: string): ExtractedContractData {
   const defaults = defaultExtractedContractData();
   const isKorean = /[가-힣]/.test(rawText);
 
+  // Try to extract document title
   const displayName =
-    rawText.match(isKorean ? /^(.*계약서.*)$/m : /^(.*(?:Agreement|Contract).*)$/im)?.[1]?.trim() ||
+    rawText.match(/^(.*(?:Statement of Work|Agreement|Contract|SOW|계약서).*)$/im)?.[1]?.trim() ||
+    rawText.match(/^(.*(?:Project Name|프로젝트명)\s*[:：]\s*(.+))$/im)?.[2]?.trim() ||
     null;
 
+  // Try to extract vendor name
   const vendorName =
-    rawText.match(
-      isKorean
-        ? /"을".*?\n\s*(?:회사명|기관명)[:\s]*(.+)/m
-        : /(?:Party\s*B|Seller|Provider).*?(?:Company|Name)[:\s]*(.+)/im
-    )?.[1]?.trim() || null;
+    rawText.match(/Vendor\s*Name\s*[:：]\s*(.+)/im)?.[1]?.trim() ||
+    rawText.match(/Prepared\s*By[\s\S]*?(?:Company|Name|Vendor)\s*[:：]\s*(.+)/im)?.[1]?.trim() ||
+    rawText.match(/"을".*?\n\s*(?:회사명|기관명)\s*[:：]\s*(.+)/m)?.[1]?.trim() ||
+    null;
+
+  // Try to extract SOW number for displayName
+  const sowNumber = rawText.match(/SOW\s*(?:Number|#)?\s*[:：]?\s*(SOW-?\d+)/im)?.[1]?.trim();
+  const version = rawText.match(/Version\s*[:：]\s*(\d+)/im)?.[1];
+  const shortDisplay = sowNumber ? `${sowNumber}${version ? ` V${version}` : ""}` : null;
+
+  // Try effective date
+  const effectiveDate =
+    rawText.match(/Effective\s*Date\s*[:：]\s*(\d{4}-\d{2}-\d{2})/im)?.[1] || null;
+
+  // Try to extract created by (vendor contact)
+  const createdBy =
+    rawText.match(/Vendor\s*Contact\s*[:：]\s*([^/\n]+)/im)?.[1]?.trim() || null;
 
   return {
     ...defaults,
     vendorName,
-    displayName,
+    displayName: shortDisplay || displayName,
     name: displayName,
+    acquisitionDate: effectiveDate,
+    createdBy,
     status: ContractStatus.in_review,
+    version: version ? parseInt(version, 10) : null,
   };
 }
