@@ -31,7 +31,7 @@ Required JSON shape:
   "contractLocation": string | null,
   "createdBy": string | null,
   "dataOriginCountries": string[],
-  "displayName": string | null,
+  "displayName": string | null,    // short display label (e.g. "NorthBridge Radiology Dataset License v3")
   "licenseExpirationDate": "YYYY-MM-DD" | null,
   "licenseType": LicenseType,
   "mayAutoRenew": Trilean,
@@ -39,7 +39,7 @@ Required JSON shape:
   "mustDestroy": Trilean,
   "mustNotifyOnDeidFailure": boolean,
   "mustNotifyOnDeidFailureWithinDays": number | null,
-  "name": string | null,
+  "name": string | null,          // internal contract name (e.g. "2026 NorthBridge Imaging Data License Agreement")
   "phiDeidMethod": PhiDeidMethod,
   "phiDeidHipaaMethod": PhiDeidHipaaMethod | null,
   "phiDeidOtherMethod": string | null,
@@ -63,7 +63,8 @@ Rules:
 - status should default to in_review unless clearly finalized.
 - mustNotifyOnDeidFailure must be true only when explicit notice obligation exists.
 - Arrays must contain unique values.
-- Do not add extra keys.`;
+- Do not add extra keys.
+- "name" is the full contract title; "displayName" is a shorter label. Both should be extracted if available.`;
 
 const enumValues = <T extends Record<string, string>>(enumObj: T) =>
   Object.values(enumObj) as T[keyof T][];
