@@ -11,6 +11,7 @@ RUN npm ci
 
 COPY . .
 
+# Cache bust: v2 - force rebuild after schema overhaul
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
 
