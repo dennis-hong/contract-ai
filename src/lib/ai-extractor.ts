@@ -212,7 +212,7 @@ export async function extractContractData(
   const openai = new OpenAI({ apiKey });
 
   const response = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: "gpt-5.2",
     messages: [
       { role: "system", content: EXTRACTION_PROMPT },
       { role: "user", content: rawText.slice(0, 30000) },
