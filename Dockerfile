@@ -25,4 +25,4 @@ ENV HOSTNAME="0.0.0.0"
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && npm start"]
+CMD ["sh", "-c", "npx prisma db push --skip-generate && npm start"]
