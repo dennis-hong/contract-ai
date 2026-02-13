@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
 
 async function parsePDFAndExtract(contractId: string, filePath: string) {
   try {
-    const rawText = await extractTextFromPDF(filePath);
+    const rawText = (await extractTextFromPDF(filePath)).replace(/\x00/g, "");
     const extracted = await extractContractData(rawText);
     const input = extractedToInput(extracted);
 

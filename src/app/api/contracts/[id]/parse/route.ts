@@ -42,7 +42,7 @@ export async function POST(
     }
 
     const filePath = path.join(process.cwd(), "uploads", contract.filePath);
-    const rawText = await extractTextFromPDF(filePath);
+    const rawText = (await extractTextFromPDF(filePath)).replace(/\x00/g, "");
     const extracted = await extractContractData(rawText);
     const input = extractedToInput(extracted);
     const latestData = contract.contractData[0] ?? null;
